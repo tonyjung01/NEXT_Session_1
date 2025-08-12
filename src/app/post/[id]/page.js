@@ -14,6 +14,7 @@ export default function PostPage() {
     const [author, setAuthor] = useState('');
     const [content, setContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [file, setFile] = useState(null);
 
     useEffect(() => {
         const fetchPost = async () => {
@@ -57,10 +58,23 @@ export default function PostPage() {
     async function handleSave() {
         setIsSubmitting(true);
         try {
+            let mediaUrl = post.mediaUrl || undefined;
+            if (file) {
+                const form = new FormData();
+                form.append('file', file);
+                form.append('filename', file.name);
+                form.append('access', 'public');
+                const up = await fetch('/api/uploads', { method: 'POST', body: form });
+                if (up.ok) {
+                    const { url } = await up.json();
+                    mediaUrl = url;
+                }
+            }
+
             const res = await fetch(`/api/posts/${params.id}`, {
-                method: 'PUT',
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, author, content }),
+                body: JSON.stringify({ title, author, content, mediaUrl }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -88,6 +102,11 @@ export default function PostPage() {
                         placeholder="작성자"
                     />
                     <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="내용" />
+                    <input
+                        type="file"
+                        accept="image/*,video/*"
+                        onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    />
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={handleSave} disabled={isSubmitting}>
                             저장
@@ -107,6 +126,15 @@ export default function PostPage() {
                         <strong>작성자:</strong> {post.author}
                     </p>
                     <p>{post.content}</p>
+                    {post.mediaUrl && (
+                        <div style={{ margin: '12px 0' }}>
+                            {/\.(mp4|webm|ogg)(\?|$)/i.test(post.mediaUrl) ? (
+                                <video src={post.mediaUrl} controls style={{ maxWidth: '100%' }} />
+                            ) : (
+                                <img src={post.mediaUrl} alt="media" style={{ maxWidth: '100%' }} />
+                            )}
+                        </div>
+                    )}
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={() => setIsEditing(true)}>수정</button>
                         <button onClick={handleDelete} style={{ color: 'red' }}>

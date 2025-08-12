@@ -1,54 +1,71 @@
 // app/api/posts/[id]/route.js
+export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { posts } from '../route'; // posts 배열 불러오기
+import { getDb } from '@/lib/firebase-admin';
 
-export async function GET(req, { params }) {
-    const post = posts.find((p) => p.id.toString() === params.id);
+export async function GET(_req, { params }) {
+    try {
+        const db = getDb();
+        const doc = await db.collection('posts').doc(params.id).get();
+        if (!doc.exists) {
+            return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+        }
 
-    if (!post) {
-        return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+        return NextResponse.json({ id: doc.id, ...doc.data() });
+    } catch (error) {
+        console.error(`GET /api/posts/${params.id} error:`, error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-
-    return NextResponse.json(post);
 }
 
-export async function PUT(req, { params }) {
-    const postIndex = posts.findIndex((p) => p.id.toString() === params.id);
-
-    if (postIndex === -1) {
-        return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-    }
-
-    let body = {};
+export async function PATCH(req, { params }) {
     try {
-        body = await req.json();
-    } catch (_) {
-        // ignore parse error; will be handled by validation below
+        const db = getDb();
+        let body = {};
+        try {
+            body = await req.json();
+        } catch (_) {}
+
+        const { title, author, content, mediaUrl } = body;
+        if (title === undefined && author === undefined && content === undefined && mediaUrl === undefined) {
+            return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+        }
+
+        const docRef = db.collection('posts').doc(params.id);
+        const docSnap = await docRef.get();
+        if (!docSnap.exists) {
+            return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+        }
+
+        const updated = {
+            ...(title !== undefined ? { title } : {}),
+            ...(author !== undefined ? { author } : {}),
+            ...(content !== undefined ? { content } : {}),
+            ...(mediaUrl !== undefined ? { mediaUrl } : {}),
+            updatedAt: new Date().toISOString(),
+        };
+        await docRef.update(updated);
+        const after = await docRef.get();
+
+        return NextResponse.json({ id: after.id, ...after.data() });
+    } catch (error) {
+        console.error(`PATCH /api/posts/${params.id} error:`, error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-
-    const { title, author, content } = body;
-    if (title === undefined && author === undefined && content === undefined) {
-        return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-    }
-
-    const updatedPost = {
-        ...posts[postIndex],
-        ...(title !== undefined ? { title } : {}),
-        ...(author !== undefined ? { author } : {}),
-        ...(content !== undefined ? { content } : {}),
-    };
-
-    posts[postIndex] = updatedPost;
-    return NextResponse.json(updatedPost);
 }
 
 export async function DELETE(_req, { params }) {
-    const postIndex = posts.findIndex((p) => p.id.toString() === params.id);
-
-    if (postIndex === -1) {
-        return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    try {
+        const db = getDb();
+        const docRef = db.collection('posts').doc(params.id);
+        const snap = await docRef.get();
+        if (!snap.exists) {
+            return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+        }
+        await docRef.delete();
+        return new Response(null, { status: 204 });
+    } catch (error) {
+        console.error(`DELETE /api/posts/${params.id} error:`, error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-
-    posts.splice(postIndex, 1);
-    return new Response(null, { status: 204 });
 }
