@@ -1,8 +1,10 @@
 import Link from 'next/link';
+import { getDb } from '@/lib/firebase-admin';
 
 export default async function HomePage() {
-    const res = await fetch('http://localhost:3000/api/posts', { cache: 'no-store' });
-    const posts = await res.json();
+    const db = getDb();
+    const snapshot = await db.collection('posts').orderBy('createdAt', 'desc').limit(50).get();
+    const posts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
     return (
         <div>
