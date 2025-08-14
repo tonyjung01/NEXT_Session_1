@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { getDb } from '@/lib/firebase-admin';
 
